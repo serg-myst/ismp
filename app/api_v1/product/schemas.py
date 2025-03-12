@@ -18,7 +18,19 @@ class ProductBase(BaseModel):
     name: str = Field(max_length=100)
     fullname: str = Field(max_length=1024)
     product_group_id: int
+    code: str = Field(max_length=11)
+    article: str = Field(max_length=50)
 
 
 class Product(ProductBase):
     id: uuid.UUID
+
+
+class ProductPack(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    product_id: uuid.UUID
+    name: str = Field(max_length=50)
+    numerator: int
+    denominator: int
