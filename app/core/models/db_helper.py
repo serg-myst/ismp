@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     create_async_engine,
@@ -23,6 +24,7 @@ class DatabaseHelper:
         )
         return session
 
+    @asynccontextmanager
     async def session_dependency(self) -> AsyncSession:
         async with self.session_factory() as session:
             yield session
@@ -30,8 +32,10 @@ class DatabaseHelper:
 
     async def scoped_session_dependency(self) -> AsyncSession:
         session = self.get_scoped_session()
-        yield session
-        await session.close()
+        try:
+            yield session
+        finally:
+            await session.close()
 
 
 db_helper = DatabaseHelper(db_settings.db_url(), db_settings.echo)

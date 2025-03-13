@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field, ConfigDict
 import uuid
-from datetime import date
+from datetime import date, datetime
 from .models import CisStatus, PackType
+from typing import Optional, List
 
 
 class Checking(BaseModel):
@@ -20,3 +21,36 @@ class Checking(BaseModel):
     packagetype: PackType
     quantity: int
     checked: bool
+
+
+empty_uuid = uuid.UUID(int=0)
+
+
+class CheckingCreate(BaseModel):
+    delivery_id: uuid.UUID
+    product_id: uuid.UUID
+    cis: str = Field(max_length=100)
+    parent_id: Optional[uuid.UUID] = Field(
+        default_factory=lambda: uuid.UUID(int=0), exclude=True
+    )
+
+
+class CisResponse(BaseModel):
+    parent_id: Optional[uuid.UUID] = Field(default=None, exclude=True)
+    delivery_id: Optional[uuid.UUID] = Field(default=None, exclude=True)
+    product_id: Optional[uuid.UUID] = Field(default=None, exclude=True)
+
+    cis: str
+    status: str
+    gtin: str
+    ownerinn: str = Field(..., alias="ownerInn")
+    ownername: str = Field(..., alias="ownerName")
+    packagetype: str = Field(..., alias="packageType")
+    produceddate: Optional[datetime] = Field(None, alias="producedDate")
+    child: List[str]
+
+    class Config:
+        populate_by_name = True
+        json_encoders = {
+            datetime: lambda v: v.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        }

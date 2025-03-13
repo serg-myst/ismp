@@ -1,5 +1,6 @@
 from sqlalchemy import String, ForeignKey, BigInteger, Enum, Date, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import UUID
 from core.models.base import BaseUUID
 import uuid
 import enum
@@ -34,7 +35,9 @@ class CisStatus(enum.Enum):
 class Checking(BaseUUID):
     __tablename__ = "checking"
 
-    parent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("checking.id"))
+    parent_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), default=uuid.UUID(int=0)
+    )
     delivery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("delivery.id"))
     product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("product.id"))
     cis: Mapped[str] = mapped_column(String(100))

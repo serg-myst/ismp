@@ -28,5 +28,13 @@ class DatabaseConfig(BaseConfig):
         return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
 
 
+class CisConfig(BaseConfig):
+    model_config = SettingsConfigDict(env_prefix="is_")
+
+    url_cis_info: str
+    url_token: str
+
+
 settings = BaseConfig()
 db_settings = DatabaseConfig()
+cis_settings = CisConfig()
