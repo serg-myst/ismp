@@ -36,9 +36,11 @@ class CheckingCreate(BaseModel):
 
 
 class CisResponse(BaseModel):
-    parent_id: Optional[uuid.UUID] = Field(default=None, exclude=True)
-    delivery_id: Optional[uuid.UUID] = Field(default=None, exclude=True)
-    product_id: Optional[uuid.UUID] = Field(default=None, exclude=True)
+    id: Optional[uuid.UUID] = Field(default=None, exclude=False)
+    parent_id: Optional[uuid.UUID] = Field(default=None, exclude=False)
+    delivery_id: Optional[uuid.UUID] = Field(default=None, exclude=False)
+    product_id: Optional[uuid.UUID] = Field(default=None, exclude=False)
+    quantity: Optional[int] = Field(default=None, exclude=False)
 
     cis: str
     status: str

@@ -1,4 +1,4 @@
-from sqlalchemy import select, insert
+from sqlalchemy import select, insert, update
 from sqlalchemy.engine import Result
 import asyncio
 import aiohttp
@@ -21,58 +21,117 @@ async def get_token() -> Optional[dict]:
 
 async def add_to_db(cis_in: List[CisResponse]):
     async with db_helper.session_dependency() as session:
-        stmt = insert(Checking).values([cis.dict() for cis in cis_in])
+        stmt = (
+            insert(Checking)
+            .values([cis.model_dump(exclude={"child", "id"}) for cis in cis_in])
+            .returning(Checking)
+        )
+        result = await session.execute(stmt)
+        await session.commit()
+
+        items = result.scalars().all()
+        return list(items)
 
 
+async def update_db(cis_in: List[CisResponse]):
+    async with db_helper.session_dependency() as session:
+        for item in cis_in:
+            stmt = (
+                update(Checking)
+                .where(Checking.id == item.id)
+                .values(quantity=len(item.child))
+            )
+            await session.execute(stmt)
+        await session.commit()
 
 
+def split_list_into_chunks(input_list, chunk_size=1000):
+    return [
+        input_list[i : i + chunk_size] for i in range(0, len(input_list), chunk_size)
+    ]
 
-async def check(cis_dict: dict, token: str, start):
 
-    body = list(cis_dict.keys())
-    headers = {"Authorization": f"Bearer {token}"}
-    cis_dict_child = {}
+async def send_post_request(token: str, cis_dict: dict):
 
-    if start == 2:
-        pprint(cis_dict)
-        print(body)
+    cis_list = list(cis_dict.keys())
+
+    chunks = split_list_into_chunks(cis_list)
+
+    model_list = []
+
+    for body in chunks:
+
+        headers = {"Authorization": f"Bearer {token}"}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                cis_settings.url_cis_info, json=body, headers=headers
+            ) as response:
+                if response.status == 200:
+                    result = await response.json()
+
+                    for cis_info in result:
+
+                        try:
+                            response_model = CisResponse(**cis_info["cisInfo"])
+                            response_model.id = cis_dict[response_model.cis]["id"]
+                            response_model.delivery_id = cis_dict[response_model.cis][
+                                "delivery_id"
+                            ]
+                            response_model.parent_id = cis_dict[response_model.cis][
+                                "parent_id"
+                            ]
+                            response_model.product_id = cis_dict[response_model.cis][
+                                "product_id"
+                            ]
+                            response_model.quantity = (
+                                len(response_model.child)
+                                if len(response_model.child) > 0
+                                else 1
+                            )
+                        except ValueError as e:
+                            print(f"Ошибка валидации данных: {e}")
+                        finally:
+                            model_list.append(response_model)
+
+    return model_list
+
+
+async def get_checking(cis_dict: dict, token: str, start):
+
+    if len(cis_dict) == 0:
         return
+    else:
+        cis_list = await send_post_request(token, cis_dict)
+        if start == 1:
+            await update_db(cis_list)
+        else:
+            items = await add_to_db(cis_list)
+            cis_new_items_dict = {}
+            for item in items:
+                cis_new_items_dict[item.cis] = {
+                    "id": item.id,
+                    "parent_id": item.parent_id,
+                    "delivery_id": item.delivery_id,
+                    "product_id": item.product_id,
+                }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            cis_settings.url_cis_info, json=body, headers=headers
-        ) as response:
-            if response.status == 200:
-                result = await response.json()
+            for cis in cis_list:
+                cis.id = cis_new_items_dict[cis.cis]["id"]
+                cis.parent_id = cis_new_items_dict[cis.cis]["parent_id"]
 
-                for cis_info in result:
+        cis_dict = {}
+        for cis in cis_list:
+            for cis_child in cis.child:
+                cis_dict[str(cis_child)] = {
+                    "id": "",
+                    "parent_id": cis.id,
+                    "delivery_id": cis.delivery_id,
+                    "product_id": cis.product_id,
+                }
 
-                    try:
-                        response_model = CisResponse(**cis_info["cisInfo"])
-                        response_model.delivery_id = cis_dict[response_model.cis][
-                            "delivery_id"
-                        ]
-                        response_model.parent_id = cis_dict[response_model.cis]["id"]
-                        response_model.product_id = cis_dict[response_model.cis][
-                            "product_id"
-                        ]
-                    except ValueError as e:
-                        print(f"Ошибка валидации данных: {e}")
-                    finally:
-                        for child_cis in response_model.child:
-                            cis_dict_child[child_cis] = {
-                                "id": response_model.parent_id,
-                                "delivery_id": response_model.delivery_id,
-                                "product_id": response_model.product_id,
-                            }
+        start += 1
 
-                start += 1
-
-                await check(cis_dict_child, token, start)
-
-            else:
-                print(f"Ошибка {response.status}: {await response.text()}")
-                return None
+        await get_checking(cis_dict, token, start)
 
 
 async def start_checking():
@@ -90,13 +149,14 @@ async def start_checking():
                 cis_dict = {
                     str(cis.cis): {
                         "id": cis.id,
+                        "parent_id": cis.parent_id,
                         "delivery_id": cis.delivery_id,
                         "product_id": cis.product_id,
                     }
                     for cis in items
                 }
 
-            await check(cis_dict, token, 1)
+            await get_checking(cis_dict, token, 1)
 
 
 if __name__ == "__main__":
