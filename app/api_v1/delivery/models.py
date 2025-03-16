@@ -13,6 +13,7 @@ class Delivery(BaseUUID):
     documentdate: Mapped[date] = mapped_column(Date)
     documentnumber: Mapped[str] = mapped_column(String(15))
     supplier: Mapped[str] = mapped_column(String(150))
+    supplierinn: Mapped[str] = mapped_column(String(12))
 
     def __repr__(self):
         return f"id: {self.id} №{self.documentnumber} от {self.documentdate}"

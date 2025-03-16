@@ -16,6 +16,7 @@ async def create_delivery(
             "documentdate": stmt.excluded.documentdate,
             "documentnumber": stmt.excluded.documentnumber,
             "supplier": stmt.excluded.supplier,
+            "supplierinn": stmt.excluded.supplierinn,
         },
     ).returning(Delivery)
 

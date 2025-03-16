@@ -41,6 +41,9 @@ class CisResponse(BaseModel):
     delivery_id: Optional[uuid.UUID] = Field(default=None, exclude=False)
     product_id: Optional[uuid.UUID] = Field(default=None, exclude=False)
     quantity: Optional[int] = Field(default=None, exclude=False)
+    ownererror: bool = Field(default=None, exclude=False)
+    statuserror: bool = Field(default=None, exclude=False)
+    checked: bool = Field(default=None, exclude=False)
 
     cis: str
     status: str

@@ -11,3 +11,4 @@ class Delivery(BaseModel):
     documentdate: date
     documentnumber: str = Field(max_length=15)
     supplier: str = Field(max_length=150)
+    supplierinn: str = Field(max_length=12)

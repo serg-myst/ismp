@@ -4,6 +4,7 @@ import asyncio
 import aiohttp
 from typing import Optional, List
 from app.api_v1.cischecking.models import Checking
+from app.api_v1.delivery.models import Delivery
 from app.api_v1.cischecking.schemas import CisResponse
 from core.models.db_helper import db_helper
 from config.config import cis_settings
@@ -39,7 +40,7 @@ async def update_db(cis_in: List[CisResponse]):
             stmt = (
                 update(Checking)
                 .where(Checking.id == item.id)
-                .values(quantity=len(item.child))
+                .values(quantity=len(item.child), checked=True)
             )
             await session.execute(stmt)
         await session.commit()
@@ -51,13 +52,15 @@ def split_list_into_chunks(input_list, chunk_size=1000):
     ]
 
 
-async def send_post_request(token: str, cis_dict: dict):
+async def send_post_request(token: str, cis_dict: dict, ownerinn: str):
 
     cis_list = list(cis_dict.keys())
 
     chunks = split_list_into_chunks(cis_list)
 
     model_list = []
+
+    status_list = ["INTRODUCED", "APPLIED"]
 
     for body in chunks:
 
@@ -83,11 +86,18 @@ async def send_post_request(token: str, cis_dict: dict):
                             response_model.product_id = cis_dict[response_model.cis][
                                 "product_id"
                             ]
+                            response_model.statuserror = (
+                                response_model.status not in status_list
+                            )
+                            response_model.ownererror = (
+                                response_model.ownerinn != ownerinn
+                            )
                             response_model.quantity = (
                                 len(response_model.child)
                                 if len(response_model.child) > 0
                                 else 1
                             )
+                            response_model.checked = True
                         except ValueError as e:
                             print(f"Ошибка валидации данных: {e}")
                         finally:
@@ -96,12 +106,12 @@ async def send_post_request(token: str, cis_dict: dict):
     return model_list
 
 
-async def get_checking(cis_dict: dict, token: str, start):
+async def get_checking(cis_dict: dict, token: str, start, ownerinn: str):
 
     if len(cis_dict) == 0:
         return
     else:
-        cis_list = await send_post_request(token, cis_dict)
+        cis_list = await send_post_request(token, cis_dict, ownerinn)
         if start == 1:
             await update_db(cis_list)
         else:
@@ -131,7 +141,7 @@ async def get_checking(cis_dict: dict, token: str, start):
 
         start += 1
 
-        await get_checking(cis_dict, token, start)
+        await get_checking(cis_dict, token, start, ownerinn)
 
 
 async def start_checking():
@@ -143,9 +153,27 @@ async def start_checking():
 
         if token:
             async with db_helper.session_dependency() as session:
-                stmt = select(Checking)
+                stmt = (
+                    select(
+                        Checking.id,
+                        Checking.product_id,
+                        Checking.delivery_id,
+                        Checking.parent_id,
+                        Checking.cis,
+                        Delivery.supplierinn,
+                    )
+                    .join(Delivery)
+                    .where(Checking.checked.is_(False))
+                )
                 result: Result = await session.execute(stmt)
-                items = result.scalars().all()
+                items = result.all()
+
+                ownerinn = ""
+                if items:
+                    ownerinn = items[0].supplierinn
+
+                print(ownerinn)
+
                 cis_dict = {
                     str(cis.cis): {
                         "id": cis.id,
@@ -156,7 +184,7 @@ async def start_checking():
                     for cis in items
                 }
 
-            await get_checking(cis_dict, token, 1)
+            await get_checking(cis_dict, token, 1, ownerinn)
 
 
 if __name__ == "__main__":

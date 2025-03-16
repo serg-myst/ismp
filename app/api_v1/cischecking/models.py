@@ -49,3 +49,5 @@ class Checking(BaseUUID):
     packagetype: Mapped[PackType] = mapped_column(Enum(PackType))
     quantity: Mapped[int] = mapped_column(BigInteger)
     checked: Mapped[bool] = mapped_column(Boolean, default=False)
+    ownererror: Mapped[bool] = mapped_column(Boolean, default=False)
+    statuserror: Mapped[bool] = mapped_column(Boolean, default=False)
