@@ -21,17 +21,27 @@ async def get_token() -> Optional[dict]:
 
 
 async def add_to_db(cis_in: List[CisResponse]):
-    async with db_helper.session_dependency() as session:
-        stmt = (
-            insert(Checking)
-            .values([cis.model_dump(exclude={"child", "id"}) for cis in cis_in])
-            .returning(Checking)
-        )
-        result = await session.execute(stmt)
-        await session.commit()
 
-        items = result.scalars().all()
-        return list(items)
+    chunks = split_list_into_chunks(cis_in)
+
+    item_list = []
+    for cis_in_chunk in chunks:
+        async with db_helper.session_dependency() as session:
+            stmt = (
+                insert(Checking)
+                .values(
+                    [cis.model_dump(exclude={"child", "id"}) for cis in cis_in_chunk]
+                )
+                .returning(Checking)
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+
+            items = result.scalars().all()
+            for item in items:
+                item_list.append(item)
+
+    return list(item_list)
 
 
 async def update_db(cis_in: List[CisResponse]):
@@ -71,7 +81,6 @@ async def send_post_request(token: str, cis_dict: dict, ownerinn: str):
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-
                     for cis_info in result:
 
                         try:
@@ -99,10 +108,12 @@ async def send_post_request(token: str, cis_dict: dict, ownerinn: str):
                             )
                             response_model.checked = True
                         except ValueError as e:
+                            print(cis_info)
                             print(f"Ошибка валидации данных: {e}")
                         finally:
                             model_list.append(response_model)
-
+                else:
+                    print(f"Статус ответа {response.status}")
     return model_list
 
 
@@ -171,9 +182,6 @@ async def start_checking():
                 ownerinn = ""
                 if items:
                     ownerinn = items[0].supplierinn
-
-                print(ownerinn)
-
                 cis_dict = {
                     str(cis.cis): {
                         "id": cis.id,

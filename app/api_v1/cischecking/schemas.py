@@ -59,3 +59,8 @@ class CisResponse(BaseModel):
         json_encoders = {
             datetime: lambda v: v.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         }
+
+
+class CisUnit(BaseModel):
+    delivery_id: uuid.UUID
+    cis: str
