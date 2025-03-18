@@ -1,14 +1,12 @@
 from sqlalchemy import select, insert, update
 from sqlalchemy.engine import Result
-import asyncio
 import aiohttp
 from typing import Optional, List
-from app.api_v1.cischecking.models import Checking
-from app.api_v1.delivery.models import Delivery
-from app.api_v1.cischecking.schemas import CisResponse
+from api_v1.cischecking.models import Checking
+from api_v1.delivery.models import Delivery
+from api_v1.cischecking.schemas import CisResponse
 from core.models.db_helper import db_helper
 from config.config import cis_settings
-from pprint import pprint
 
 
 async def get_token() -> Optional[dict]:
@@ -44,13 +42,24 @@ async def add_to_db(cis_in: List[CisResponse]):
     return list(item_list)
 
 
-async def update_db(cis_in: List[CisResponse]):
+async def update_db(cis_in: List[CisResponse], ownerinn: str):
     async with db_helper.session_dependency() as session:
         for item in cis_in:
             stmt = (
                 update(Checking)
                 .where(Checking.id == item.id)
-                .values(quantity=len(item.child), checked=True)
+                .values(
+                    quantity=len(item.child),
+                    status=item.status,
+                    gtin=item.gtin,
+                    produceddate=item.produceddate,
+                    ownerinn=item.ownerinn,
+                    ownername=item.ownername,
+                    packagetype=item.packagetype,
+                    ownererror=item.ownerinn != ownerinn,
+                    statuserror=item.ownerinn != ownerinn,
+                    checked=True,
+                )
             )
             await session.execute(stmt)
         await session.commit()
@@ -124,7 +133,7 @@ async def get_checking(cis_dict: dict, token: str, start, ownerinn: str):
     else:
         cis_list = await send_post_request(token, cis_dict, ownerinn)
         if start == 1:
-            await update_db(cis_list)
+            await update_db(cis_list, ownerinn=ownerinn)
         else:
             items = await add_to_db(cis_list)
             cis_new_items_dict = {}
@@ -155,7 +164,7 @@ async def get_checking(cis_dict: dict, token: str, start, ownerinn: str):
         await get_checking(cis_dict, token, start, ownerinn)
 
 
-async def start_checking():
+async def start_checking(delivery_id):
 
     token_response = await get_token()
 
@@ -174,6 +183,7 @@ async def start_checking():
                         Delivery.supplierinn,
                     )
                     .join(Delivery)
+                    .where(Checking.delivery_id == delivery_id)
                     .where(Checking.checked.is_(False))
                 )
                 result: Result = await session.execute(stmt)
@@ -196,4 +206,4 @@ async def start_checking():
 
 
 if __name__ == "__main__":
-    asyncio.run(start_checking())
+    ...

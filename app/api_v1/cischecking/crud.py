@@ -6,21 +6,30 @@ from .models import Checking, PackType
 from .schemas import CheckingCreate, CisUnit
 from typing import List
 import uuid
+import asyncio
+from .service import start_checking
 
 
 async def create_check_cis(
     session: AsyncSession,
     cis_in: List[CheckingCreate],
 ):
-    if len(cis_in) != 0:
-        stmt = delete(Checking).where(Checking.delivery_id == cis_in[0].delivery_id)
-        await session.execute(stmt)
-        await session.commit()
+    if len(cis_in) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="no data to verify!"
+        )
+
+    delivery_id = cis_in[0].delivery_id
+    stmt = delete(Checking).where(Checking.delivery_id == delivery_id)
+    await session.execute(stmt)
+    await session.commit()
 
     stmt = insert(Checking).values([cis.dict() for cis in cis_in])
 
     await session.execute(stmt)
     await session.commit()
+
+    asyncio.create_task(start_checking(delivery_id=delivery_id))
 
     return {
         "status": status.HTTP_201_CREATED,
