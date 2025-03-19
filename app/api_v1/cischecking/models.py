@@ -43,6 +43,7 @@ class Checking(BaseUUID):
     cis: Mapped[str] = mapped_column(String(100))
     status: Mapped[CisStatus] = mapped_column(Enum(CisStatus))
     produceddate: Mapped[date] = mapped_column(Date)
+    expirationdate: Mapped[date] = mapped_column(Date)
     gtin: Mapped[str] = mapped_column(String(25))
     ownerinn: Mapped[str] = mapped_column(String(12))
     ownername: Mapped[str] = mapped_column(String(150))
@@ -51,3 +52,4 @@ class Checking(BaseUUID):
     checked: Mapped[bool] = mapped_column(Boolean, default=False)
     ownererror: Mapped[bool] = mapped_column(Boolean, default=False)
     statuserror: Mapped[bool] = mapped_column(Boolean, default=False)
+    monopallet: Mapped[bool] = mapped_column(Boolean, default=False)

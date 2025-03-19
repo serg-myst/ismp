@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 import uuid
+from .models import TimeType
 
 
 class ProductGroupBase(BaseModel):
@@ -20,6 +21,8 @@ class ProductBase(BaseModel):
     product_group_id: int
     code: str = Field(max_length=11)
     article: str = Field(max_length=50)
+    bestbeforedate: int
+    shelflifeunit: TimeType
 
 
 class Product(ProductBase):

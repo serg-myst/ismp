@@ -1,8 +1,10 @@
-from sqlalchemy import select, insert, update
+import asyncio
+
+from sqlalchemy import select, insert, update, func
 from sqlalchemy.engine import Result
 import aiohttp
 from typing import Optional, List
-from api_v1.cischecking.models import Checking
+from api_v1.cischecking.models import Checking, PackType
 from api_v1.delivery.models import Delivery
 from api_v1.cischecking.schemas import CisResponse
 from core.models.db_helper import db_helper
@@ -79,7 +81,9 @@ async def send_post_request(token: str, cis_dict: dict, ownerinn: str):
 
     model_list = []
 
-    status_list = ["INTRODUCED", "APPLIED"]
+    status_list = [
+        "INTRODUCED",
+    ]
 
     for body in chunks:
 
@@ -164,6 +168,34 @@ async def get_checking(cis_dict: dict, token: str, start, ownerinn: str):
         await get_checking(cis_dict, token, start, ownerinn)
 
 
+async def check_mono_pallet(delivery_id):
+    async with db_helper.session_dependency() as session:
+        stmt = (
+            select(
+                Checking.parent_id,
+                func.count(func.distinct(Checking.gtin)).label("gtin_count"),
+            )
+            .where(Checking.delivery_id == delivery_id)
+            .where(Checking.packagetype == PackType.LEVEL1)
+            .group_by(Checking.parent_id)
+        )
+
+        result = await session.execute(stmt)
+        gtin_counts = result.fetchall()
+
+        for item in gtin_counts:
+            stmt = (
+                update(Checking)
+                .where(Checking.id == item.parent_id)
+                .values(
+                    monopallet=item.gtin_count == 1,
+                )
+            )
+
+            await session.execute(stmt)
+        await session.commit()
+
+
 async def start_checking(delivery_id):
 
     token_response = await get_token()
@@ -203,6 +235,7 @@ async def start_checking(delivery_id):
                 }
 
             await get_checking(cis_dict, token, 1, ownerinn)
+            await check_mono_pallet(delivery_id)
 
 
 if __name__ == "__main__":

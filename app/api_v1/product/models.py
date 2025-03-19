@@ -1,8 +1,18 @@
-from sqlalchemy import String, ForeignKey, UUID, UniqueConstraint, Integer
+from sqlalchemy import String, ForeignKey, UUID, UniqueConstraint, Integer, Enum
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm import relationship
 from core.models.base import BaseUUID, BaseInt
 import uuid
+import enum
+
+
+class TimeType(enum.Enum):
+    SECOND = "Секунда"
+    MINUTE = "Минута"
+    OUR = "Час"
+    DAY = "День"
+    MONTH = "Месяц"
+    YEAR = "Год"
 
 
 class ProductGroup(BaseInt):
@@ -39,6 +49,8 @@ class Product(BaseUUID):
     product_group_id: Mapped[int] = mapped_column(ForeignKey(ProductGroup.id))
     code: Mapped[str] = mapped_column(String(11))
     article: Mapped[str] = mapped_column(String(50))
+    bestbeforedate: Mapped[int] = mapped_column(Integer)
+    shelflifeunit: Mapped[TimeType] = mapped_column(Enum(TimeType))
 
     pg = relationship(ProductGroup, backref="product", uselist=True, lazy="selectin")
     pack = relationship(ProductPack, backref="pack", uselist=True, lazy="selectin")

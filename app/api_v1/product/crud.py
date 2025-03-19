@@ -28,6 +28,8 @@ async def create_products(
             "fullname": stmt.excluded.fullname,
             "code": stmt.excluded.code,
             "article": stmt.excluded.article,
+            "bestbeforedate": stmt.excluded.bestbeforedate,
+            "shelflifeunit": stmt.excluded.shelflifeunit,
         },
     ).returning(Product)
 

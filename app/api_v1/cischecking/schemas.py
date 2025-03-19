@@ -44,6 +44,7 @@ class CisResponse(BaseModel):
     ownererror: bool = Field(default=None, exclude=False)
     statuserror: bool = Field(default=None, exclude=False)
     checked: bool = Field(default=None, exclude=False)
+    monopallet: bool = Field(default=None, exclude=False)
 
     cis: str
     status: str
@@ -52,6 +53,7 @@ class CisResponse(BaseModel):
     ownername: str = Field(..., alias="ownerName")
     packagetype: str = Field(..., alias="packageType")
     produceddate: Optional[datetime] = Field(None, alias="producedDate")
+    expirationdate: Optional[datetime] = Field(None, alias="expirationDate")
     child: List[str]
 
     class Config:
