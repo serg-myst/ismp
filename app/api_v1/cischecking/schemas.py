@@ -12,6 +12,7 @@ class Checking(BaseModel):
     parent_id: uuid.UUID
     delivery_id: uuid.UUID
     product_id: uuid.UUID
+    productpack_id: uuid.UUID
     cis: str = Field(max_length=100)
     status: CisStatus
     produceddate: date
@@ -20,6 +21,7 @@ class Checking(BaseModel):
     ownername: str = Field(max_length=150)
     packagetype: PackType
     quantity: int
+    quantity_upd: int
     checked: bool
 
 
@@ -33,6 +35,8 @@ class CheckingCreate(BaseModel):
     parent_id: Optional[uuid.UUID] = Field(
         default_factory=lambda: uuid.UUID(int=0), exclude=True
     )
+    packagetype: uuid.UUID
+    quantity_upd: int
 
 
 class CisResponse(BaseModel):
@@ -40,11 +44,15 @@ class CisResponse(BaseModel):
     parent_id: Optional[uuid.UUID] = Field(default=None, exclude=False)
     delivery_id: Optional[uuid.UUID] = Field(default=None, exclude=False)
     product_id: Optional[uuid.UUID] = Field(default=None, exclude=False)
+    productpack_id: Optional[uuid.UUID] = Field(default=None, exclude=False)
     quantity: Optional[int] = Field(default=None, exclude=False)
+    quantity_upd: Optional[int] = Field(default=None, exclude=False)
     ownererror: bool = Field(default=None, exclude=False)
     statuserror: bool = Field(default=None, exclude=False)
     checked: bool = Field(default=None, exclude=False)
     monopallet: bool = Field(default=None, exclude=False)
+    quantityerror: bool = Field(default=None, exclude=False)
+    expirationdateerror: bool = Field(default=None, exclude=False)
 
     cis: str
     status: str
