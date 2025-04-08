@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from . import crud
-from .schemas import Delivery, DeliveryPlan, DeliveryPlanResponse
+from .schemas import Delivery, DeliveryPlan, DeliveryFact
 from core.models.db_helper import db_helper
 
 
@@ -25,3 +25,11 @@ async def get_delivery_plan(
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     return await crud.create_delivery_plan(session=session, delivery_in=delivery_in)
+
+
+@router.post("/send-fact/", status_code=status.HTTP_201_CREATED)
+async def send_delivery_fact(
+    delivery_in: list[DeliveryFact],
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    return await crud.create_delivery_fact(session=session, delivery_in=delivery_in)

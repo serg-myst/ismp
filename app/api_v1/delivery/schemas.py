@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict
 import uuid
-from datetime import date
+from datetime import date, datetime
+from typing import Optional
 from .models import DeliveryTypes
 
 
@@ -29,4 +30,12 @@ class DeliveryPlanResponse(BaseModel):
     checking_id: uuid.UUID
     productpack_id: uuid.UUID
     cis: str = Field(default=None, exclude=False)
+    quantity: int
+
+
+class DeliveryFact(BaseModel):
+    delivery_id: uuid.UUID
+    product_id: uuid.UUID
+    cis: str = Field(default=None, exclude=False)
+    productpack_id: uuid.UUID
     quantity: int

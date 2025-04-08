@@ -1,9 +1,10 @@
 from sqlalchemy import String, ForeignKey, BigInteger, Enum, Date, Boolean
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from core.models.base import BaseUUID
 import uuid
 import enum
+from typing import List
 from datetime import date
 
 
@@ -57,3 +58,9 @@ class Checking(BaseUUID):
     quantityerror: Mapped[bool] = mapped_column(Boolean, default=False)
     expirationdateerror: Mapped[bool] = mapped_column(Boolean, default=False)
     monopallet: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    delivery_items: Mapped[List["DeliveryItemPlan"]] = relationship(
+        "DeliveryItemPlan",
+        back_populates="checking",
+        cascade="all, delete",
+    )

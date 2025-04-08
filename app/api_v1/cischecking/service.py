@@ -1,11 +1,12 @@
 import asyncio
 
-from sqlalchemy import select, insert, update, func
+from sqlalchemy import select, insert, update, func, or_
 from sqlalchemy.engine import Result
 import aiohttp
+from datetime import datetime
 from typing import Optional, List
 from api_v1.cischecking.models import Checking, PackType
-from api_v1.delivery.models import Delivery
+from api_v1.delivery.models import Delivery, DeliveryStatusHistory, DocumentStatus
 from api_v1.cischecking.schemas import CisResponse
 from core.models.db_helper import db_helper
 from config.config import cis_settings
@@ -196,6 +197,41 @@ async def check_mono_pallet(delivery_id):
         await session.commit()
 
 
+async def set_delivery_status(delivery_id):
+    async with db_helper.session_dependency() as session:
+
+        stmt = (
+            select(Checking.id.label("id"))
+            .where(Checking.delivery_id == delivery_id)
+            .where(
+                or_(
+                    Checking.ownererror.is_(True),
+                    Checking.statuserror.is_(True),
+                )
+            )
+        )
+
+        status = DocumentStatus.VERIFIED
+        result = await session.execute(stmt)
+        if result:
+            status = DocumentStatus.VERIFIED_ERROR
+
+        stmt = update(Delivery).where(Delivery.id == delivery_id).values(status=status)
+
+        await session.execute(stmt)
+
+        stmt = insert(DeliveryStatusHistory).values(
+            {
+                "delivery_id": delivery_id,
+                "status": status,
+                "status_date": datetime.now(),
+            }
+        )
+        await session.execute(stmt)
+
+        await session.commit()
+
+
 async def start_checking(delivery_id):
 
     token_response = await get_token()
@@ -236,6 +272,7 @@ async def start_checking(delivery_id):
 
             await get_checking(cis_dict, token, 1, ownerinn)
             await check_mono_pallet(delivery_id)
+            await set_delivery_status(delivery_id)
 
 
 if __name__ == "__main__":

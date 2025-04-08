@@ -32,10 +32,7 @@ class CheckingCreate(BaseModel):
     delivery_id: uuid.UUID
     product_id: uuid.UUID
     cis: str = Field(max_length=100)
-    parent_id: Optional[uuid.UUID] = Field(
-        default_factory=lambda: uuid.UUID(int=0), exclude=True
-    )
-    packagetype: uuid.UUID
+    productpack_id: uuid.UUID
     quantity_upd: int
 
 

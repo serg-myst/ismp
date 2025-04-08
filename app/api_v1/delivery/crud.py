@@ -2,8 +2,18 @@ from fastapi import status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import select, delete
-from .schemas import Delivery as DeliverySchemas, DeliveryPlan
-from .models import Delivery, DeliveryItemPlan, DeliveryTypes
+from sqlalchemy import insert as usual_insert
+from sqlalchemy.exc import IntegrityError
+from .schemas import Delivery as DeliverySchemas, DeliveryPlan, DeliveryFact
+from datetime import datetime
+from .models import (
+    Delivery,
+    DeliveryItemPlan,
+    DeliveryItemFact,
+    DeliveryTypes,
+    DeliveryStatusHistory,
+    DocumentStatus,
+)
 from api_v1.cischecking.models import Checking
 from api_v1.product.models import ProductPack, Product
 
@@ -27,6 +37,16 @@ async def create_delivery(
     result = await session.execute(stmt)
     await session.commit()
     item = result.scalars().first()
+
+    stmt = insert(DeliveryStatusHistory).values(
+        {
+            "delivery_id": delivery_in.id,
+            "status": DocumentStatus.NEW,
+            "status_date": datetime.now(),
+        }
+    )
+    await session.execute(stmt)
+    await session.commit()
 
     return item
 
@@ -126,3 +146,25 @@ async def create_delivery_plan(session: AsyncSession, delivery_in: DeliveryPlan)
     result = await create_plan(delivery_in.delivery_id, pack_type, session)
 
     return result
+
+
+async def create_delivery_fact(session: AsyncSession, delivery_in: list[DeliveryFact]):
+    delivery_id = delivery_in[0].delivery_id
+    stmt = delete(DeliveryItemFact).where(DeliveryItemFact.delivery_id == delivery_id)
+    await session.execute(stmt)
+    await session.commit()
+
+    try:
+        for item in delivery_in:
+            stmt = usual_insert(DeliveryItemFact).values(**item.model_dump())
+            await session.execute(stmt)
+        await session.commit()
+
+    except IntegrityError as e:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ошибка внешнего ключа или другие ограничения БД: {str(e)}",
+        )
+
+    return {"status": status.HTTP_201_CREATED, "detail": "data fact created"}

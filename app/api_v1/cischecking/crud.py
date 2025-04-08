@@ -1,10 +1,12 @@
 from fastapi import status, HTTPException
-from sqlalchemy import delete, insert, select, func, case
+from sqlalchemy import delete, insert, select, update, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.engine import Result
 from .models import Checking, PackType
 from .schemas import CheckingCreate, CisUnit
+from api_v1.delivery.models import Delivery, DocumentStatus, DeliveryStatusHistory
 from typing import List
+from datetime import datetime
 import uuid
 import asyncio
 from .service import start_checking
@@ -20,6 +22,25 @@ async def create_check_cis(
         )
 
     delivery_id = cis_in[0].delivery_id
+
+    stmt = (
+        update(Delivery)
+        .where(Delivery.id == delivery_id)
+        .values(status=DocumentStatus.INSPECT)
+    )
+    await session.execute(stmt)
+    await session.commit()
+
+    stmt = insert(DeliveryStatusHistory).values(
+        {
+            "delivery_id": delivery_id,
+            "status": DocumentStatus.INSPECT,
+            "status_date": datetime.now(),
+        }
+    )
+    await session.execute(stmt)
+    await session.commit()
+
     stmt = delete(Checking).where(Checking.delivery_id == delivery_id)
     await session.execute(stmt)
     await session.commit()
