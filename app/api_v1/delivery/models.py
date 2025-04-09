@@ -48,6 +48,7 @@ class DeliveryItemPlan(BaseUUID):
     checking_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("checking.id"))
     productpack_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("productpack.id"))
     quantity: Mapped[int] = mapped_column(Integer)
+    producedate: Mapped[date] = mapped_column(Date)
 
     checking = relationship(
         "Checking", back_populates="delivery_items", cascade="all, delete"
@@ -62,6 +63,7 @@ class DeliveryItemFact(BaseUUID):
     cis: Mapped[String] = mapped_column(String(200))
     productpack_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("productpack.id"))
     quantity: Mapped[int] = mapped_column(Integer)
+    producedate: Mapped[date] = mapped_column(Date)
 
 
 class DeliveryStatusHistory(BaseUUID):

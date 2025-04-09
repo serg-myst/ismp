@@ -1,21 +1,23 @@
 from fastapi import status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy import insert as usual_insert
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import aliased
 from .schemas import Delivery as DeliverySchemas, DeliveryPlan, DeliveryFact
 from datetime import datetime
 from .models import (
     Delivery,
     DeliveryItemPlan,
     DeliveryItemFact,
-    DeliveryTypes,
     DeliveryStatusHistory,
     DocumentStatus,
 )
 from api_v1.cischecking.models import Checking
 from api_v1.product.models import ProductPack, Product
+import uuid
+from collections import defaultdict
 
 
 async def create_delivery(
@@ -51,21 +53,30 @@ async def create_delivery(
     return item
 
 
-async def create_plan(delivery_id, pack_type, session: AsyncSession):
+async def create_plan(delivery_id, session: AsyncSession):
+
+    empty_uuid = uuid.UUID(int=0)
+
+    Parent = aliased(Checking)
+    Child = aliased(Checking)
 
     stmt = (
         select(
-            Checking.id,
-            Checking.delivery_id,
-            Checking.product_id,
-            Checking.productpack_id,
-            Checking.quantity_upd,
+            Child.delivery_id,
+            Child.product_id,
+            Child.parent_id.label("checking_id"),
+            Parent.productpack_id,
+            Child.produceddate,
+            func.sum(Child.quantity).label("quantity"),
         )
-        .where(Checking.delivery_id == delivery_id)
-        .where(
-            Checking.packagetype == "LEVEL2"
-            if pack_type == DeliveryTypes.PALLET
-            else "LEVEL1"
+        .join(Parent, Child.parent_id == Parent.id)
+        .where(Parent.parent_id == empty_uuid, Parent.delivery_id == delivery_id)
+        .group_by(
+            Child.delivery_id,
+            Child.product_id,
+            Child.parent_id,
+            Parent.productpack_id,
+            Child.produceddate,
         )
     )
 
@@ -74,11 +85,12 @@ async def create_plan(delivery_id, pack_type, session: AsyncSession):
 
     data_to_insert = [
         {
-            "checking_id": item.id,
+            "checking_id": item.checking_id,
             "delivery_id": item.delivery_id,
             "product_id": item.product_id,
             "productpack_id": item.productpack_id,
-            "quantity": item.quantity_upd,
+            "producedate": item.produceddate,
+            "quantity": item.quantity,
         }
         for item in items
     ]
@@ -94,6 +106,7 @@ async def create_plan(delivery_id, pack_type, session: AsyncSession):
             DeliveryItemPlan.delivery_id,
             DeliveryItemPlan.product_id,
             DeliveryItemPlan.productpack_id,
+            DeliveryItemPlan.producedate,
             DeliveryItemPlan.quantity,
         )
     )
@@ -105,6 +118,7 @@ async def create_plan(delivery_id, pack_type, session: AsyncSession):
             DeliveryItemPlan.id,
             DeliveryItemPlan.delivery_id,
             DeliveryItemPlan.product_id,
+            DeliveryItemPlan.producedate,
             Product.product_id.label("product_id_1c"),
             Product.name.label("product_name"),
             DeliveryItemPlan.productpack_id,
@@ -121,7 +135,50 @@ async def create_plan(delivery_id, pack_type, session: AsyncSession):
     )
 
     final_result = await session.execute(select_stmt)
-    return final_result.mappings().all()
+    rows = final_result.fetchall()
+
+    grouped_data = defaultdict(
+        lambda: {
+            "id": None,
+            "delivery_id": None,
+            "product_id": None,
+            "product_id_1c": None,
+            "product_name": None,
+            "productpack_id": None,
+            "pack_name": None,
+            "numerator": None,
+            "denominator": None,
+            "cis": None,
+            "producedate": [],
+        }
+    )
+
+    for row in rows:
+        key = (
+            row.delivery_id,
+            row.product_id,
+            row.cis,
+            row.productpack_id,
+        )
+
+        grouped_data[key]["id"] = row.id
+        grouped_data[key]["delivery_id"] = row.delivery_id
+        grouped_data[key]["product_id"] = row.product_id
+        grouped_data[key]["product_id_1c"] = row.product_id_1c
+        grouped_data[key]["product_name"] = row.product_name
+        grouped_data[key]["productpack_id"] = row.productpack_id
+        grouped_data[key]["pack_name"] = row.pack_name
+        grouped_data[key]["numerator"] = row.numerator
+        grouped_data[key]["denominator"] = row.denominator
+        grouped_data[key]["cis"] = row.cis
+
+        grouped_data[key]["producedate"].append(
+            {"date": row.producedate, "quantity": row.quantity}
+        )
+
+    result = list(grouped_data.values())
+
+    return result
 
 
 async def create_delivery_plan(session: AsyncSession, delivery_in: DeliveryPlan):
@@ -129,9 +186,9 @@ async def create_delivery_plan(session: AsyncSession, delivery_in: DeliveryPlan)
     stmt = select(Delivery.deliverytype).where(Delivery.id == delivery_in.delivery_id)
 
     result = await session.execute(stmt)
-    pack_type = result.scalars().first()
+    delivery = result.scalars().first()
 
-    if not pack_type:
+    if not delivery:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Поставка с id = {delivery_in.delivery_id} не найдена",
@@ -143,7 +200,7 @@ async def create_delivery_plan(session: AsyncSession, delivery_in: DeliveryPlan)
     await session.execute(stmt)
     await session.commit()
 
-    result = await create_plan(delivery_in.delivery_id, pack_type, session)
+    result = await create_plan(delivery_in.delivery_id, session)
 
     return result
 
