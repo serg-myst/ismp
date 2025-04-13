@@ -5,19 +5,22 @@ from sqlalchemy import select, delete, func
 from sqlalchemy import insert as usual_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
-from .schemas import Delivery as DeliverySchemas, DeliveryPlan, DeliveryFact
 from datetime import datetime
+import uuid
+from collections import defaultdict
+import asyncio
 from .models import (
     Delivery,
     DeliveryItemPlan,
     DeliveryItemFact,
     DeliveryStatusHistory,
     DocumentStatus,
+    DeliveryItemPlanFact,
 )
 from api_v1.cischecking.models import Checking
 from api_v1.product.models import ProductPack, Product
-import uuid
-from collections import defaultdict
+from .schemas import Delivery as DeliverySchemas, DeliveryPlan, DeliveryFact
+from .service import update_delivery_plan_fact
 
 
 async def create_delivery(
@@ -186,12 +189,12 @@ async def create_delivery_plan(session: AsyncSession, delivery_in: DeliveryPlan)
     stmt = select(Delivery.deliverytype).where(Delivery.id == delivery_in.delivery_id)
 
     result = await session.execute(stmt)
-    delivery = result.scalars().first()
+    find_delivery = result.scalar_one_or_none()
 
-    if not delivery:
+    if find_delivery is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Поставка с id = {delivery_in.delivery_id} не найдена",
+            detail=f"приобретение с id = {delivery_in.delivery_id} не найдено в базе",
         )
 
     stmt = delete(DeliveryItemPlan).where(
@@ -224,4 +227,79 @@ async def create_delivery_fact(session: AsyncSession, delivery_in: list[Delivery
             detail=f"Ошибка внешнего ключа или другие ограничения БД: {str(e)}",
         )
 
+    asyncio.create_task(update_delivery_plan_fact(delivery_id=delivery_id))
+
     return {"status": status.HTTP_201_CREATED, "detail": "data fact created"}
+
+
+async def get_delivery_differences(session: AsyncSession, delivery_id: uuid.UUID):
+    stmt = select(Delivery).where(Delivery.id == delivery_id)
+    result = await session.execute(stmt)
+    find_delivery = result.scalar_one_or_none()
+    if find_delivery is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"приобретение с id {delivery_id} не найдено в базе",
+        )
+
+    stmt = (
+        select(
+            DeliveryItemPlanFact.delivery_id,
+            DeliveryItemPlanFact.product_id,
+            DeliveryItemPlanFact.productpack_id,
+            DeliveryItemPlanFact.producedate,
+            DeliveryItemPlanFact.cis,
+            DeliveryItemPlanFact.quantityplan,
+            DeliveryItemPlanFact.quantityfact,
+        )
+        .where(DeliveryItemPlanFact.delivery_id == delivery_id)
+        .where(DeliveryItemPlanFact.quantityplan != DeliveryItemPlanFact.quantityfact)
+    )
+
+    result = await session.execute(stmt)
+    return result.mappings().all()
+
+
+async def get_delivery_fact(session: AsyncSession, delivery_id: uuid.UUID):
+    stmt = select(Delivery).where(Delivery.id == delivery_id)
+    result = await session.execute(stmt)
+    find_delivery = result.scalar_one_or_none()
+    if find_delivery is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"приобретение с id {delivery_id} не найдено в базе",
+        )
+
+    if find_delivery.status != DocumentStatus.ACCEPTED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"приобретение с id {delivery_id} не в статусе Принято",
+        )
+
+    stmt = (
+        select(DeliveryItemPlanFact.delivery_id)
+        .where(DeliveryItemPlanFact.delivery_id == delivery_id)
+        .where(DeliveryItemPlanFact.quantityplan != DeliveryItemPlanFact.quantityfact)
+    )
+
+    result = await session.execute(stmt)
+    items = result.all()
+
+    if items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"приобретение с id {delivery_id} содержит расхождение плана и факта."
+            f" Текущмй статус приобретения {find_delivery.status.value}",
+        )
+
+    stmt = select(
+        DeliveryItemPlanFact.delivery_id,
+        DeliveryItemPlanFact.product_id,
+        DeliveryItemPlanFact.productpack_id,
+        DeliveryItemPlanFact.producedate,
+        DeliveryItemPlanFact.cis,
+        DeliveryItemPlanFact.quantityfact.label("quantity"),
+    ).where(DeliveryItemPlanFact.delivery_id == delivery_id)
+
+    result = await session.execute(stmt)
+    return result.mappings().all()

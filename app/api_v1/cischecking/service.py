@@ -1,5 +1,3 @@
-import asyncio
-
 from sqlalchemy import select, insert, update, func, or_
 from sqlalchemy.engine import Result
 import aiohttp

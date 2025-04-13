@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi import APIRouter, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from . import crud
@@ -44,3 +46,25 @@ async def send_delivery_fact(
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     return await crud.create_delivery_fact(session=session, delivery_in=delivery_in)
+
+
+@router.post(
+    "/get-differences/",
+    summary="метод возвращает расхождения плана и факта по приобретению",
+)
+async def get_delivery_differences_plan_fact(
+    delivery_id: uuid.UUID,
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    return await crud.get_delivery_differences(session=session, delivery_id=delivery_id)
+
+
+@router.post(
+    "/get-fact/",
+    summary="метод возвращает фактические данные приобретения. используем для создания документа в сторонней базе",
+)
+async def get_delivery_differences_plan_fact(
+    delivery_id: uuid.UUID,
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    return await crud.get_delivery_fact(session=session, delivery_id=delivery_id)

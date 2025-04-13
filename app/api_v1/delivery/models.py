@@ -17,6 +17,8 @@ class DocumentStatus(enum.Enum):
     INSPECT = "Проверка"
     VERIFIED = "Проверен"
     VERIFIED_ERROR = "Проверен ошибки"
+    PLANFACT_ERROR = "Ошибки план-факт"
+    ACCEPTED = "Принята"
 
 
 class Delivery(BaseUUID):
@@ -72,3 +74,16 @@ class DeliveryStatusHistory(BaseUUID):
     status_date: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=func.now())
     delivery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("delivery.id"))
     status: Mapped[DocumentStatus] = mapped_column(Enum(DocumentStatus))
+
+
+class DeliveryItemPlanFact(BaseUUID):
+    __tablename__ = "deliveryitemplanfact"
+
+    delivery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("delivery.id"))
+    product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("product.id"))
+    productpack_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("productpack.id"))
+    producedate: Mapped[date] = mapped_column(Date)
+    cis: Mapped[String] = mapped_column(String(200))
+
+    quantityplan: Mapped[int] = mapped_column(Integer)
+    quantityfact: Mapped[int] = mapped_column(Integer)
