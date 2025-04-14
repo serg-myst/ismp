@@ -68,3 +68,29 @@ async def get_delivery_differences_plan_fact(
     session: AsyncSession = Depends(db_helper.scoped_session_dependency),
 ):
     return await crud.get_delivery_fact(session=session, delivery_id=delivery_id)
+
+
+@router.post(
+    "/get-delivery-status/",
+    status_code=status.HTTP_200_OK,
+    summary="метод возвращает текущий статус документа приобретения",
+)
+async def get_delivery_status(
+    delivery_id: uuid.UUID,
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    return await crud.get_delivery_status(session=session, delivery_id=delivery_id)
+
+
+@router.post(
+    "/get-delivery-status-history/",
+    status_code=status.HTTP_200_OK,
+    summary="метод возвращает историю статусов документа приобретения",
+)
+async def get_delivery_status(
+    delivery_id: uuid.UUID,
+    session: AsyncSession = Depends(db_helper.scoped_session_dependency),
+):
+    return await crud.get_delivery_status_history(
+        session=session, delivery_id=delivery_id
+    )

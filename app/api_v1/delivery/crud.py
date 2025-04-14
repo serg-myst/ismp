@@ -23,6 +23,19 @@ from .schemas import Delivery as DeliverySchemas, DeliveryPlan, DeliveryFact
 from .service import update_delivery_plan_fact
 
 
+async def check_delivery(session: AsyncSession, delivery_id) -> Delivery:
+    stmt = select(Delivery).where(Delivery.id == delivery_id)
+    result = await session.execute(stmt)
+    find_delivery = result.scalar_one_or_none()
+
+    if find_delivery is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"приобретение с id = {delivery_id} не найдено в базе",
+        )
+    return find_delivery
+
+
 async def create_delivery(
     session: AsyncSession,
     delivery_in: DeliverySchemas,
@@ -57,6 +70,8 @@ async def create_delivery(
 
 
 async def create_plan(delivery_id, session: AsyncSession):
+
+    await check_delivery(session, delivery_id)
 
     empty_uuid = uuid.UUID(int=0)
 
@@ -186,16 +201,7 @@ async def create_plan(delivery_id, session: AsyncSession):
 
 async def create_delivery_plan(session: AsyncSession, delivery_in: DeliveryPlan):
 
-    stmt = select(Delivery.deliverytype).where(Delivery.id == delivery_in.delivery_id)
-
-    result = await session.execute(stmt)
-    find_delivery = result.scalar_one_or_none()
-
-    if find_delivery is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"приобретение с id = {delivery_in.delivery_id} не найдено в базе",
-        )
+    await check_delivery(session, delivery_in.delivery_id)
 
     stmt = delete(DeliveryItemPlan).where(
         DeliveryItemPlan.delivery_id == delivery_in.delivery_id
@@ -209,7 +215,11 @@ async def create_delivery_plan(session: AsyncSession, delivery_in: DeliveryPlan)
 
 
 async def create_delivery_fact(session: AsyncSession, delivery_in: list[DeliveryFact]):
+
     delivery_id = delivery_in[0].delivery_id
+
+    await check_delivery(session, delivery_id)
+
     stmt = delete(DeliveryItemFact).where(DeliveryItemFact.delivery_id == delivery_id)
     await session.execute(stmt)
     await session.commit()
@@ -233,14 +243,8 @@ async def create_delivery_fact(session: AsyncSession, delivery_in: list[Delivery
 
 
 async def get_delivery_differences(session: AsyncSession, delivery_id: uuid.UUID):
-    stmt = select(Delivery).where(Delivery.id == delivery_id)
-    result = await session.execute(stmt)
-    find_delivery = result.scalar_one_or_none()
-    if find_delivery is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"приобретение с id {delivery_id} не найдено в базе",
-        )
+
+    await check_delivery(session, delivery_id)
 
     stmt = (
         select(
@@ -261,14 +265,8 @@ async def get_delivery_differences(session: AsyncSession, delivery_id: uuid.UUID
 
 
 async def get_delivery_fact(session: AsyncSession, delivery_id: uuid.UUID):
-    stmt = select(Delivery).where(Delivery.id == delivery_id)
-    result = await session.execute(stmt)
-    find_delivery = result.scalar_one_or_none()
-    if find_delivery is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"приобретение с id {delivery_id} не найдено в базе",
-        )
+
+    find_delivery = await check_delivery(session, delivery_id)
 
     if find_delivery.status != DocumentStatus.ACCEPTED:
         raise HTTPException(
@@ -302,4 +300,23 @@ async def get_delivery_fact(session: AsyncSession, delivery_id: uuid.UUID):
     ).where(DeliveryItemPlanFact.delivery_id == delivery_id)
 
     result = await session.execute(stmt)
+    return result.mappings().all()
+
+
+async def get_delivery_status(session: AsyncSession, delivery_id: uuid.UUID):
+    find_delivery = await check_delivery(session, delivery_id)
+    return {"delivery_id": find_delivery.id, "status": find_delivery.status.value}
+
+
+async def get_delivery_status_history(session: AsyncSession, delivery_id: uuid.UUID):
+    await check_delivery(session, delivery_id)
+
+    stmt = select(
+        DeliveryStatusHistory.delivery_id,
+        DeliveryStatusHistory.status_date.label("date"),
+        DeliveryStatusHistory.status,
+    ).where(DeliveryStatusHistory.delivery_id == delivery_id)
+
+    result = await session.execute(stmt)
+
     return result.mappings().all()
